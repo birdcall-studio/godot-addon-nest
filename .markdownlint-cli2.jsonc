@@ -1,0 +1,11 @@
+// markdownlint-cli2 settings for `make lint`. Rules: https://github.com/DavidAnson/markdownlint
+{
+  "config": {
+    // Prose is wrapped by hand at about 80 columns; links and table rows run longer.
+    "MD013": false,
+    // GDScript is indented with tabs, so samples of it keep them.
+    "MD010": { "ignore_code_languages": ["gdscript"] }
+  },
+  // semantic-release writes CHANGELOG.md, so it is not linted.
+  "ignores": ["CHANGELOG.md", ".godot/**"]
+}
