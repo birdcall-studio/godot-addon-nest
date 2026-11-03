@@ -1,0 +1,12 @@
+# Check out every file with LF line endings. Then shell scripts and Godot files
+# work the same in the Linux container, whatever your core.autocrlf setting is.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ogg binary
+*.wav binary
+*.res binary
+*.scn binary
+*.exr binary
+*.hdr binary
+*.glb binary
