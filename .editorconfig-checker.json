@@ -1,0 +1,11 @@
+{
+  "Exclude": [
+    "(^|/)\\.godot/",
+    "\\.uid$",
+    "\\.import$",
+    "\\.tscn$",
+    "\\.tres$",
+    "\\.(res|scn|exr|hdr|glb|gltf|bin)$",
+    "(^|/)project\\.godot$"
+  ]
+}
