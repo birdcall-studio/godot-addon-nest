@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# Install one Godot stable release as $PREFIX/bin/godot, or print the newest
+# patch release of a stable branch.
+#   nest-install-godot 4.7.2            install Godot 4.7.2
+#   nest-install-godot --latest 4.7     print the newest 4.7 release, such as 4.7.2
+set -euo pipefail
+
+base="https://github.com/godotengine/godot-builds/releases/download"
+
+# Only a 404 means "no such release". Any other failure stops the script, so
+# it never quietly settles on an older patch.
+exists() {
+    local code
+    code="$(curl -sIL --retry 3 -o /dev/null -w '%{http_code}' \
+        "$base/$1-stable/Godot_v$1-stable_linux.x86_64.zip")" || code=000
+    case "$code" in
+        200) return 0 ;;
+        404) return 1 ;;
+        *) echo "Checking Godot $1 failed (HTTP $code)" >&2; exit 1 ;;
+    esac
+}
+
+if [[ "${1:-}" == --latest ]]; then
+    branch="${2:?usage: nest-install-godot --latest <major.minor>}"
+    if [[ ! "$branch" =~ ^[0-9]+\.[0-9]+$ ]]; then
+        echo "Give a stable branch as major.minor, for example 4.7" >&2
+        exit 1
+    fi
+    # A branch's first release has no .0 (4.7, then 4.7.1, 4.7.2...), and Godot
+    # skips no patch numbers, so probe upward until a release is missing.
+    if ! exists "$branch"; then
+        echo "Godot $branch has no stable release" >&2
+        exit 1
+    fi
+    version="$branch"
+    patch=1
+    while exists "$branch.$patch"; do
+        version="$branch.$patch"
+        patch=$((patch + 1))
+    done
+    echo "$version"
+    exit 0
+fi
+
+version="${1:?usage: nest-install-godot <release> | --latest <major.minor>}"
+if [[ ! "$version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
+    echo "Give a stable release such as 4.7 or 4.7.2" >&2
+    exit 1
+fi
+bin="${PREFIX:-/usr/local}/bin"
+mkdir -p "$bin"
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+pkg="Godot_v${version}-stable_linux.x86_64"
+"$(dirname "$0")/nest-fetch" "$base/$version-stable/$pkg.zip" "$tmp/godot.zip" \
+    "$base/$version-stable/SHA512-SUMS.txt"
+unzip -q "$tmp/godot.zip" -d "$tmp"
+install -m 0755 "$tmp/$pkg" "$bin/godot"
+"$bin/godot" --headless --version

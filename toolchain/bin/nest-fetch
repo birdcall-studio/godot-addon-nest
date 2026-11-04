@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Download a file and stop unless its checksum matches. The expected hash
+# comes from the line for the file in the release's checksum file. For a
+# release that has no checksum file, pass the hash itself. The hash length
+# picks SHA-256 or SHA-512.
+#   nest-fetch <url> <output> <checksum file url>
+#   nest-fetch <url> <output> sha256:<hex>
+set -euo pipefail
+
+url="${1:?usage: nest-fetch <url> <output> <checksum file url | sha256:hex>}"
+out="${2:?usage: nest-fetch <url> <output> <checksum file url | sha256:hex>}"
+sums="${3:?usage: nest-fetch <url> <output> <checksum file url | sha256:hex>}"
+name="${url##*/}"
+
+if [[ "$sums" == sha256:* ]]; then
+    want="${sums#sha256:}"
+else
+    list="$(curl -fsSL --retry 3 "$sums")"
+    # "<hash>  <name>", or "<hash> *<name>" for a binary-mode line.
+    want="$(awk -v n="$name" '$2 == n || $2 == "*" n { print $1; exit }' <<< "$list")"
+    if [[ -z "$want" ]]; then
+        echo "$sums lists no checksum for $name" >&2
+        exit 1
+    fi
+fi
+case "${#want}" in
+    64) sum=sha256sum ;;
+    128) sum=sha512sum ;;
+    *) echo "$name: expected a SHA-256 or SHA-512 hash, got '$want'" >&2; exit 1 ;;
+esac
+
+curl -fsSL --retry 3 -o "$out" "$url"
+if ! "$sum" --check --quiet <<< "$want  $out"; then
+    echo "$name: checksum mismatch, so the download was deleted" >&2
+    rm -f "$out"
+    exit 1
+fi
