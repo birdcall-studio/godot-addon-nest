@@ -1,0 +1,30 @@
+; Test project for the add-on in addons/. Games copy only the add-on folder,
+; never this project file.
+
+config_version=5
+
+[application]
+
+config/name="godot-addon-nest"
+config/features=PackedStringArray("4.7")
+
+[debug]
+
+; Godot's own script warnings, used as the lint step. 0 = Ignore, 1 = Warn,
+; 2 = Error. A warning set to Error stops the script from compiling, so the
+; editor, `make test` and CI all fail on it. Change them in the editor under
+; Project Settings > Debug > GDScript. Directory Rules must include
+; res://addons (1 = Include), or `make test` fails.
+gdscript/warnings/directory_rules={
+"res://addons": 1
+}
+gdscript/warnings/unused_variable=2
+gdscript/warnings/unused_local_constant=2
+gdscript/warnings/unused_parameter=2
+gdscript/warnings/shadowed_variable=2
+gdscript/warnings/unreachable_code=2
+gdscript/warnings/standalone_expression=2
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/my_addon/plugin.cfg")
