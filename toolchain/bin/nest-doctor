@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# Check the repo layout. There must be one add-on with a version line in its
+# plugin.cfg, and project.godot must target this toolchain's Godot branch. The
+# GDScript warning settings are checked by `make test` instead, since only
+# Godot knows their real values.
+#   nest-doctor
+set -euo pipefail
+
+# shellcheck source=../versions.sh disable=SC1091
+source "$(cd "$(dirname "$0")/.." && pwd)/versions.sh"
+status=0
+
+shopt -s nullglob
+plugins=(addons/*/plugin.cfg)
+if (( ${#plugins[@]} != 1 )); then
+    echo "expected exactly one addons/<name>/plugin.cfg, found ${#plugins[@]}"
+    status=1
+elif ! grep -q '^version="' "${plugins[0]}"; then
+    echo "${plugins[0]}: needs a version=\"...\" line for releases to update"
+    status=1
+fi
+
+if ! grep -q "^config/features=PackedStringArray(\"$GODOT_VERSION\"" project.godot 2> /dev/null; then
+    echo "project.godot: config/features must start with \"$GODOT_VERSION\" to match the toolchain"
+    status=1
+fi
+
+if [[ "$GODOT_RELEASE" != "$GODOT_VERSION" && "$GODOT_RELEASE" != "$GODOT_VERSION".* ]]; then
+    echo "toolchain/versions.sh: GODOT_RELEASE $GODOT_RELEASE is not on the $GODOT_VERSION branch"
+    status=1
+fi
+
+if (( status )); then
+    exit 1
+fi
+echo "doctor: ok (Godot $GODOT_RELEASE)"
