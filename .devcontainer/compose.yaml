@@ -1,0 +1,21 @@
+---
+# This is the dev container, and CI runs `make check` in it too. The checkout
+# is mounted at /workspace, so you edit files on your machine and the tools in
+# the container see them at once.
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        # Files the container writes belong to you. CI passes its own IDs.
+        USER_UID: ${USER_UID:-1000}
+        USER_GID: ${USER_GID:-1000}
+    platform: linux/amd64
+    volumes:
+      - ..:/workspace
+    working_dir: /workspace
+    init: true
+    # Keeps the dev container running. `docker compose run` overrides it for
+    # its one command.
+    command: sleep infinity

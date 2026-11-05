@@ -1,0 +1,17 @@
+{
+  "name": "Godot add-on",
+  "dockerComposeFile": "compose.yaml",
+  "service": "app",
+  "workspaceFolder": "/workspace",
+  "remoteUser": "vscode",
+  "customizations": {
+    "vscode": {
+      "extensions": ["geequlim.godot-tools", "EditorConfig.EditorConfig", "DavidAnson.vscode-markdownlint"],
+      "settings": {
+        "godotTools.editorPath.godot4": "/usr/local/bin/godot",
+        "godotTools.lsp.headless": true
+      }
+    }
+  },
+  "postCreateCommand": "make hooks import"
+}
