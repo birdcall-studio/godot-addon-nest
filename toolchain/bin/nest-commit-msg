@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Check that commit messages follow Conventional Commits. semantic-release
+# reads them to pick the next version. https://www.conventionalcommits.org
+#   nest-commit-msg <file>             the commit-msg git hook (lefthook passes the file)
+#   nest-commit-msg --range <a>..<b>   every non-merge commit in a range (CI)
+#   nest-commit-msg --subject <text>   one subject line, such as a pull request title
+set -euo pipefail
+
+types="build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test"
+pattern="^($types)(\([a-z0-9._/-]+\))?!?: [^ ]"
+# Messages git writes itself: merges, reverts and autosquash commits.
+generated='^(Merge |Revert "|fixup! |squash! |amend! )'
+status=0
+
+check() {
+    local subject="$1" where="$2"
+    if [[ ! "$subject" =~ $pattern && ! "$subject" =~ $generated ]]; then
+        echo "$where: not a Conventional Commit: $subject"
+        status=1
+    fi
+}
+
+case "${1:-}" in
+    --range)
+        range="${2:?usage: nest-commit-msg --range <a>..<b>}"
+        # Not a process substitution: set -e must see git fail.
+        log="$(git log --no-merges --format='%H %s' "$range")"
+        while IFS=' ' read -r sha subject; do
+            [[ -n "$sha" ]] && check "$subject" "${sha:0:7}"
+        done <<< "$log"
+        ;;
+    --subject)
+        check "${2:?usage: nest-commit-msg --subject <text>}" "subject"
+        ;;
+    "")
+        echo "usage: nest-commit-msg <file> | --range <a>..<b> | --subject <text>" >&2
+        exit 2
+        ;;
+    *)
+        check "$(grep -v '^#' "$1" | head -n 1)" "commit message"
+        ;;
+esac
+
+if (( status )); then
+    echo "Use '<type>(<optional scope>): <description>', where type is one of:"
+    echo "  ${types//|/, }"
+    echo "Add '!' after the type, or a 'BREAKING CHANGE:' footer, for a breaking change."
+fi
+exit "$status"
