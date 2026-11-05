@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# Check a release zip the way a game uses it. The zip must hold only
+# addons/<name>/, with plugin.cfg and LICENSE inside. In a new, empty project
+# on the toolchain's Godot, the plugin must enable and every script must
+# compile, with no errors.
+#   nest-verify-package              check the zip in dist/
+#   nest-verify-package <zip>        check that zip
+set -euo pipefail
+
+nest="$(cd "$(dirname "$0")/.." && pwd)"
+# shellcheck source=../versions.sh disable=SC1091
+source "$nest/versions.sh"
+godot="${GODOT:-godot}"
+timeout="${TIMEOUT:-180}"
+
+shopt -s nullglob
+if (( $# )); then
+    zip="$1"
+else
+    zips=(dist/*.zip)
+    if (( ${#zips[@]} != 1 )); then
+        echo "expected one zip in dist/, found ${#zips[@]}; run 'make package'" >&2
+        exit 1
+    fi
+    zip="${zips[0]}"
+fi
+zip="$(cd "$(dirname "$zip")" && pwd)/$(basename "$zip")"
+
+entries="$(unzip -Z1 "$zip")"
+cfgs="$(grep -E '^addons/[^/]+/plugin\.cfg$' <<< "$entries" || true)"
+if [[ -z "$cfgs" || "$cfgs" == *$'\n'* ]]; then
+    echo "$zip: expected exactly one addons/<name>/plugin.cfg" >&2
+    exit 1
+fi
+name="$(cut -d/ -f2 <<< "$cfgs")"
+stray="$(grep -vE "^addons/(${name}/.*)?$" <<< "$entries" || true)"
+if [[ -n "$stray" ]]; then
+    echo "$zip: files outside addons/$name/:" >&2
+    echo "$stray" >&2
+    exit 1
+fi
+if ! grep -qx "addons/$name/LICENSE" <<< "$entries"; then
+    echo "$zip: no addons/$name/LICENSE" >&2
+    exit 1
+fi
+
+project="$(mktemp -d)"
+trap 'rm -rf "$project"' EXIT
+cat > "$project/project.godot" << EOF
+config_version=5
+
+[application]
+
+config/name="package check"
+config/features=PackedStringArray("$GODOT_VERSION")
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/$name/plugin.cfg")
+EOF
+unzip -q "$zip" -d "$project"
+cp "$nest/verify_package.gd" "$project/"
+
+# The editor reports a plugin it cannot load but still exits 0, so read its
+# output.
+log="$project/import.log"
+status=0
+timeout "$timeout" "$godot" --headless --path "$project" --import > "$log" 2>&1 || status=$?
+cat "$log"
+if (( status )) || grep -qE '^(ERROR|SCRIPT ERROR)' "$log"; then
+    echo "FAIL opening a clean project with $(basename "$zip") enabled" >&2
+    exit 1
+fi
+echo "ok   opened a clean project with the plugin enabled"
+
+timeout "$timeout" "$godot" --headless --path "$project" -s res://verify_package.gd -- "$name"
+echo "package ok: $(basename "$zip")"
