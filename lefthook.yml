@@ -1,0 +1,12 @@
+# Git hooks, installed by the dev container (`make hooks`). They run the quick
+# checks; run `make check` before pushing for everything CI runs.
+# https://lefthook.dev
+pre-commit:
+  jobs:
+    - name: lint
+      run: make lint
+
+commit-msg:
+  jobs:
+    - name: conventional commit
+      run: toolchain/bin/nest-commit-msg {1}
