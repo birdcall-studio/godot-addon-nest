@@ -1,0 +1,63 @@
+---
+name: Release
+
+# After Validate passes on a push to main, semantic-release reads the
+# Conventional Commits since the last tag. .releaserc.json sets it up. If any
+# commit calls for a release, it tags vX.Y.Z and publishes a GitHub release
+# with the release notes. An add-on's release also gets the zipped add-on.
+# It pushes only the tag, never a commit. So a protected main needs no bypass,
+# and GITHUB_TOKEN is enough.
+on:
+  workflow_run:
+    workflows: [Validate]
+    types: [completed]
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+# Releases take turns.
+concurrency:
+  group: main-writes
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Semantic release
+    # Only release after a passing push to main, and only if that commit is
+    # still the newest on main. A newer commit gets its own Validate run and
+    # releases after that.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_sha == github.sha
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+        with:
+          # semantic-release reads the whole history and every tag.
+          fetch-depth: 0
+
+      - name: Read the Node.js pin
+        id: pins
+        run: |
+          source toolchain/versions.sh
+          echo "node=$NODE_VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: ${{ steps.pins.outputs.node }}
+
+      - name: Install semantic-release
+        run: toolchain/bin/install-release-tools
+
+      - name: Semantic release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: semantic-release
