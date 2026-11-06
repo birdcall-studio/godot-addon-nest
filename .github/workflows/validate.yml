@@ -1,0 +1,64 @@
+---
+name: Validate
+
+# Build the dev container image from this commit's Dockerfile and run every
+# check in it. That way CI uses the same tools as your dev container.
+on:
+  push:
+    branches:
+      - main
+  # Run again when the title is edited, so the title check below sees it.
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      COMPOSE_FILE: .devcontainer/compose.yaml
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+
+      # Use the runner's user and group IDs, so the container can write to the
+      # checkout.
+      - name: Build the dev container image
+        run: |
+          USER_UID="$(id -u)" USER_GID="$(id -g)" docker compose build
+
+      - name: make check
+        run: docker compose run --rm app make check
+
+      # Only in the template: a new add-on made with `make init` must pass too.
+      - name: Initialise an add-on and check it
+        if: github.event.repository.is_template
+        run: docker compose run --rm app sh -c 'make clean init NAME=smoke_test && make check'
+
+  commits:
+    name: Conventional commits
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+
+      # Check the title too, since a squash merge uses it as the commit message.
+      - name: Check commit messages and the pull request title
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          status=0
+          toolchain/bin/nest-commit-msg --range "$BASE..$HEAD" || status=1
+          toolchain/bin/nest-commit-msg --subject "$TITLE" || status=1
+          exit "$status"
