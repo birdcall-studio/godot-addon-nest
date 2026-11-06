@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Copy a newer godot-addon-nest template's toolchain files into this
+# add-on: the list below, toolchain/, and the add-on versions of CONTRIBUTING.md
+# and .releaserc.json. The add-on's own code, test files, README and local.mk
+# are left alone. Review `git diff` afterwards, then run `make check`.
+#   nest-upgrade v2.1.1              clone that template release and copy from it
+#   nest-upgrade <template checkout> copy from a local checkout
+set -euo pipefail
+
+from="${1:?usage: nest-upgrade <release tag | template checkout>}"
+if [[ ! -d "$from" ]]; then
+    url="${NEST_TEMPLATE_URL:-https://github.com/birdcall-studio/godot-addon-nest}"
+    clone="$(mktemp -d)"
+    export NEST_UPGRADE_CLONE="$clone"
+    trap 'rm -rf "$clone"' EXIT
+    git clone --quiet --depth 1 --branch "$from" "$url" "$clone"
+    from="$clone"
+fi
+if [[ ! -x "$from/scripts/init.sh" || ! -d "$from/toolchain" ]]; then
+    echo "$from is not a godot-addon-nest checkout" >&2
+    exit 1
+fi
+if [[ -x scripts/init.sh ]]; then
+    echo "This is the template itself; run 'make init' first." >&2
+    exit 1
+fi
+
+# Run the newer template's copy of this script, so its file list is used.
+# exec skips this script's trap, so that script cleans up the clone.
+newer="$from/toolchain/bin/nest-upgrade"
+if [[ -z "${NEST_UPGRADE_HANDOVER:-}" && -x "$newer" ]]; then
+    NEST_UPGRADE_HANDOVER=1 exec "$newer" "$from"
+fi
+if [[ -n "${NEST_UPGRADE_CLONE:-}" ]]; then
+    trap 'rm -rf "$NEST_UPGRADE_CLONE"' EXIT
+fi
+
+copy() {
+    # A missing file would stop the upgrade halfway, so skip it instead.
+    if [[ ! -e "$from/$1" ]]; then
+        echo "skipped $2: not in this template release"
+        return
+    fi
+    mkdir -p "$(dirname "$2")"
+    cp "$from/$1" "$2"
+    echo "updated $2"
+}
+
+for file in Dockerfile Makefile .devcontainer/devcontainer.json .devcontainer/compose.yaml \
+    .editorconfig .editorconfig-checker.json .gitattributes .markdownlint-cli2.jsonc \
+    lefthook.yml .github/CODEOWNERS .github/dependabot.yml \
+    .github/workflows/validate.yml .github/workflows/release.yml \
+    .github/workflows/godot-patch.yml \
+    tests/run_tests.gd tests/support/test_case.gd docs/UPGRADING.md; do
+    copy "$file" "$file"
+done
+copy scripts/templates/CONTRIBUTING.md CONTRIBUTING.md
+copy scripts/templates/.releaserc.json .releaserc.json
+
+# Replace toolchain/ whole, so files the template dropped are removed too.
+# VERSION holds the template release this add-on matches. For a local
+# checkout, that is the output of git describe.
+version="$(git -C "$from" describe --tags --always 2> /dev/null || echo unknown)"
+rm -rf toolchain
+cp -r "$from/toolchain" toolchain
+echo "$version" > toolchain/VERSION
+echo "updated toolchain/ (template $version)"
