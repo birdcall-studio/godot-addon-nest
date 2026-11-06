@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Install semantic-release and its plugins globally with npm, at the versions
+# in versions.sh. The release workflow runs it on the GitHub runner.
+set -euo pipefail
+
+# shellcheck source=../versions.sh disable=SC1091
+source "$(cd "$(dirname "$0")/.." && pwd)/versions.sh"
+npm install --global --no-fund --no-audit \
+    "semantic-release@${SEMANTIC_RELEASE_VERSION}" \
+    "@semantic-release/exec@${SR_EXEC_VERSION}" \
+    "conventional-changelog-conventionalcommits@${SR_CONVENTIONALCOMMITS_VERSION}"
