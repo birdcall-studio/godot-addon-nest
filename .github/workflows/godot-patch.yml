@@ -1,0 +1,56 @@
+---
+name: Godot patch
+
+# Once a week, look for a Godot patch newer than GODOT_RELEASE. If there is
+# one, open a pull request for it. For this to work, the Actions settings of
+# both the repo and the org must let GitHub Actions create pull requests.
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bump:
+    name: Godot patch
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: write
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7.0.1
+
+      - name: Find the newest patch
+        id: godot
+        run: |
+          source toolchain/versions.sh
+          echo "pinned=$GODOT_RELEASE" >> "$GITHUB_OUTPUT"
+          echo "latest=$(toolchain/bin/nest-install-godot --latest "$GODOT_VERSION")" >> "$GITHUB_OUTPUT"
+
+      - name: Open a pull request
+        if: steps.godot.outputs.latest != steps.godot.outputs.pinned
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LATEST: ${{ steps.godot.outputs.latest }}
+        run: |
+          branch="godot-patch/$LATEST"
+          if git ls-remote --exit-code --heads origin "$branch" > /dev/null; then
+            echo "$branch already has a pull request"
+            exit 0
+          fi
+          sed -i "s/GODOT_RELEASE:=[0-9.]*/GODOT_RELEASE:=$LATEST/" toolchain/versions.sh
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+          git commit -qam "chore: install Godot $LATEST"
+          git push -q origin "$branch"
+          gh pr create --base main --head "$branch" --title "chore: install Godot $LATEST" \
+            --body "Godot $LATEST is out. Validate builds the image with it and runs every check. After merging, rebuild your dev container."
+          # A pull request opened with this token does not start any workflows,
+          # so start Validate here. Its result shows on the pull request.
+          gh workflow run validate.yml --ref "$branch"
