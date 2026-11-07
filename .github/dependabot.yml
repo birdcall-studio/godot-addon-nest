@@ -1,0 +1,22 @@
+---
+version: 2
+
+# Dependabot can't read toolchain/versions.sh. The godot-addon-nest template's
+# CONTRIBUTING.md lists the pins that are updated by hand. The "chore" prefix
+# keeps a bump from making a release.
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: "chore"
+      include: "scope"
